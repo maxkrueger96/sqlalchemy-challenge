@@ -1,5 +1,5 @@
-from flask import Flask, jsonify
-from analysis import Measurement, Station, p_scores, measure_station, 
+from flask import Flask, json, jsonify
+import analysis as ana
 
 app = Flask(__name__)
 
@@ -27,15 +27,54 @@ def hello_user():
     )
 
 @app.route("/api/v1.0/precipitation")
+def prcp_dict():
+    q = ana.p_scores
+    df = ana.pd.read_sql_query(q.statement, ana.engine,index_col="date")
+    into_dict = df["prcp"].to_dict()
+    return jsonify(into_dict)
 
 
 @app.route("/api/v1.0/stations")
-
+def stations():
+    q = ana.station_measure
+    df = ana.pd.read_sql_query(q.statement, ana.engine,index_col="station")
+    into_dict = df["name"].to_dict()
+    return jsonify(into_dict)
 
 @app.route("/api/v1.0/tobs")
-
+def tobs():
+    q = ana.year_temps
+    df = ana.pd.read_sql_query(q.statement, ana.engine,index_col="date")
+    into_dict = df["tobs"].to_dict()
+    return jsonify(into_dict)
 
 @app.route("/api/v1.0/<start>")
-
+def start_only(start):
+    q = ana.session.query(ana.Measurement.date, ana.func.min(ana.Measurement.tobs), 
+        ana.func.round(ana.func.avg(ana.Measurement.tobs),1), ana.func.max(ana.Measurement.tobs)).\
+        filter(ana.Measurement.date >= start).\
+        order_by(ana.Measurement.date).\
+        group_by(ana.Measurement.date)
+    df = ana.pd.read_sql_query(q.statement,ana.engine,index_col="date")
+    into_dict = dict.fromkeys(list(df.index))
+    for d in list(df.index):
+        into_dict[d] = {"TMIN": df["min_1"].loc[df.index == d].values[0],
+        "TAVG": df["round_1"].loc[df.index == d].values[0], 
+        "TMAX": df["max_1"].loc[df.index == d].values[0]}
+    return jsonify(into_dict)
 
 @app.route("/api/v1.0/<start>/<end>")
+def start_end(start,end):
+    q = ana.session.query(ana.Measurement.date, ana.func.min(ana.Measurement.tobs), 
+    ana.func.round(ana.func.avg(ana.Measurement.tobs),1), ana.func.max(ana.Measurement.tobs)).\
+    filter(ana.Measurement.date >= start).\
+    filter(ana.Measurement.date <= end).\
+    order_by(ana.Measurement.date).\
+    group_by(ana.Measurement.date)
+    df = ana.pd.read_sql_query(q.statement,ana.engine,index_col="date")
+    into_dict = dict.fromkeys(list(df.index))
+    for d in list(df.index):
+        into_dict[d] = {"TMIN": df["min_1"].loc[df.index == d].values[0],
+                "TAVG": df["round_1"].loc[df.index == d].values[0], 
+                "TMAX": df["max_1"].loc[df.index == d].values[0]}
+    return jsonify(into_dict)
